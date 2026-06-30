@@ -44,5 +44,5 @@ def clean(reviews: list[dict], week_id: str) -> list[dict]:
             "processed": 0,
         })
 
-    logger.info("Cleaned %d → %d reviews (dupes/short removed)", len(reviews), len(cleaned))
+    logger.info("Cleaned %d -> %d reviews (dupes/short removed)", len(reviews), len(cleaned))
     return cleaned
