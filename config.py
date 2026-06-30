@@ -18,10 +18,12 @@ PROXY_PASS = os.getenv("PROXY_PASS")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
-REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
-REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
-REDDIT_USER_AGENT = os.getenv("REDDIT_USER_AGENT", "review-mining-bot/1.0")
 
 MIN_UPVOTES = 5
 MIN_WORD_COUNT = 20
 BATCH_SIZE = 30
+
+# Guardrails
+MAX_REVIEWS_FOR_ANALYSIS = 150   # hard cap on reviews sent to Claude per run
+MAX_TOKEN_BUDGET = 100_000       # input + output tokens allowed per run before stopping
+INTER_BATCH_DELAY = 2            # seconds to wait between API calls
