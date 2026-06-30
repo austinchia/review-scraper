@@ -94,4 +94,4 @@ def fetch_weekly_counts() -> list[dict]:
         "SELECT week_id, COUNT(*) as count FROM reviews GROUP BY week_id ORDER BY week_id ASC"
     ).fetchall()
     conn.close()
-    return [{"week_id": r[0], "count": r[1]} for r in rows]
+    return [{"week_id": r["week_id"], "count": r["count"]} for r in rows]
