@@ -1,8 +1,9 @@
 import logging
 import time
-import anthropic
+from google import genai
+from google.genai import errors as gerrors
 from config import (
-    ANTHROPIC_API_KEY,
+    GEMINI_API_KEY,
     BATCH_SIZE,
     MAX_REVIEWS_FOR_ANALYSIS,
     MAX_TOKEN_BUDGET,
@@ -11,13 +12,23 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
-client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+_client = None  # initialised lazily on first call
+_MODEL  = "gemini-1.5-flash"
 
-# Claude Sonnet 4.6 pricing (USD per token)
-_INPUT_COST_PER_TOKEN  = 3.00  / 1_000_000
-_OUTPUT_COST_PER_TOKEN = 15.00 / 1_000_000
 
-SYSTEM_PROMPT = "You are an analytical assistant. Extract structured insights from customer reviews and online discussions."
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        if not GEMINI_API_KEY:
+            raise RuntimeError("GEMINI_API_KEY is not set. Add it to your .env file.")
+        _client = genai.Client(api_key=GEMINI_API_KEY)
+    return _client
+
+_SYSTEM = "You are an analytical assistant. Extract structured insights from customer reviews and online discussions."
+
+# Gemini 1.5 Flash pricing (free tier: $0; paid tier rates shown for reference)
+_INPUT_COST_PER_TOKEN  = 0.075 / 1_000_000
+_OUTPUT_COST_PER_TOKEN = 0.30  / 1_000_000
 
 USER_PROMPT_TEMPLATE = """Here are {n} reviews/posts collected from {sources} this week about {topic}.
 
@@ -50,9 +61,9 @@ class _UsageTracker:
         self.output_tokens = 0
         self.api_calls = 0
 
-    def record(self, usage):
-        self.input_tokens  += usage.input_tokens
-        self.output_tokens += usage.output_tokens
+    def record(self, input_tokens: int, output_tokens: int):
+        self.input_tokens  += input_tokens
+        self.output_tokens += output_tokens
         self.api_calls     += 1
 
     @property
@@ -68,7 +79,7 @@ class _UsageTracker:
 
     def log_summary(self):
         logger.info(
-            "API usage — calls: %d | tokens: %d in / %d out | est. cost: $%.4f",
+            "API usage -- calls: %d | tokens: %d in / %d out | est. cost: $%.4f",
             self.api_calls,
             self.input_tokens,
             self.output_tokens,
@@ -106,28 +117,31 @@ def _call_api(
     delay = 5
     for attempt in range(retries):
         try:
-            message = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=2048,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
+            response = _get_client().models.generate_content(
+                model=_MODEL,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    system_instruction=_SYSTEM,
+                    max_output_tokens=2048,
+                ),
             )
-            tracker.record(message.usage)
+            usage = response.usage_metadata
+            in_tok  = (usage.prompt_token_count or 0) if usage else 0
+            out_tok = (usage.candidates_token_count or 0) if usage else 0
+            tracker.record(in_tok, out_tok)
             logger.info(
-                "Batch call — %d in / %d out tokens (run total: %d / budget: %d)",
-                message.usage.input_tokens,
-                message.usage.output_tokens,
-                tracker.total_tokens,
-                MAX_TOKEN_BUDGET,
+                "Batch call -- %d in / %d out tokens (run total: %d / budget: %d)",
+                in_tok, out_tok, tracker.total_tokens, MAX_TOKEN_BUDGET,
             )
-            return message.content[0].text
-        except anthropic.RateLimitError:
-            logger.warning("Rate limited — retrying in %ds (attempt %d/%d)", delay, attempt + 1, retries)
-            time.sleep(delay)
-            delay *= 2
-        except anthropic.APIError as e:
-            logger.error("Anthropic API error: %s", e)
-            raise
+            return response.text or ""
+        except gerrors.ClientError as e:
+            if "429" in str(e) or "quota" in str(e).lower() or "rate" in str(e).lower():
+                logger.warning("Rate limited -- retrying in %ds (attempt %d/%d)", delay, attempt + 1, retries)
+                time.sleep(delay)
+                delay *= 2
+            else:
+                logger.error("Gemini API error: %s", e)
+                raise
     raise RuntimeError(f"All {retries} API attempts failed (rate limited)")
 
 
@@ -136,21 +150,27 @@ def _synthesise(batch_outputs: list[str], tracker: _UsageTracker) -> str:
     delay = 5
     for attempt in range(4):
         try:
-            message = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=2048,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
+            response = _get_client().models.generate_content(
+                model=_MODEL,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    system_instruction=_SYSTEM,
+                    max_output_tokens=2048,
+                ),
             )
-            tracker.record(message.usage)
-            return message.content[0].text
-        except anthropic.RateLimitError:
-            logger.warning("Rate limited on synthesis — retrying in %ds", delay)
-            time.sleep(delay)
-            delay *= 2
-        except anthropic.APIError as e:
-            logger.error("Anthropic synthesis API error: %s", e)
-            raise
+            usage = response.usage_metadata
+            in_tok  = (usage.prompt_token_count or 0) if usage else 0
+            out_tok = (usage.candidates_token_count or 0) if usage else 0
+            tracker.record(in_tok, out_tok)
+            return response.text or ""
+        except gerrors.ClientError as e:
+            if "429" in str(e) or "quota" in str(e).lower() or "rate" in str(e).lower():
+                logger.warning("Rate limited on synthesis -- retrying in %ds", delay)
+                time.sleep(delay)
+                delay *= 2
+            else:
+                logger.error("Gemini synthesis API error: %s", e)
+                raise
     raise RuntimeError("Synthesis failed after retries")
 
 
@@ -158,12 +178,10 @@ def analyse(reviews: list[dict], topic: str = "data analytics tools") -> str:
     if not reviews:
         return "No reviews to analyse."
 
-    # Guardrail: cap reviews before sending to API
     if len(reviews) > MAX_REVIEWS_FOR_ANALYSIS:
         logger.warning(
-            "Review count (%d) exceeds MAX_REVIEWS_FOR_ANALYSIS (%d) — truncating",
-            len(reviews),
-            MAX_REVIEWS_FOR_ANALYSIS,
+            "Review count (%d) exceeds MAX_REVIEWS_FOR_ANALYSIS (%d) -- truncating",
+            len(reviews), MAX_REVIEWS_FOR_ANALYSIS,
         )
         reviews = reviews[:MAX_REVIEWS_FOR_ANALYSIS]
 
@@ -181,10 +199,8 @@ def analyse(reviews: list[dict], topic: str = "data analytics tools") -> str:
     for idx, batch in enumerate(batches, 1):
         if tracker.over_budget():
             logger.warning(
-                "Token budget (%d) reached after %d/%d batches — stopping early",
-                MAX_TOKEN_BUDGET,
-                idx - 1,
-                len(batches),
+                "Token budget (%d) reached after %d/%d batches -- stopping early",
+                MAX_TOKEN_BUDGET, idx - 1, len(batches),
             )
             break
 
