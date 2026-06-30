@@ -13,7 +13,7 @@ from config import (
 logger = logging.getLogger(__name__)
 
 _client = None  # initialised lazily on first call
-_MODEL  = "gemini-1.5-flash"
+_MODEL  = "gemini-2.5-flash"
 
 
 def _get_client() -> genai.Client:
@@ -105,7 +105,7 @@ def _call_api(
     sources: str,
     topic: str,
     tracker: _UsageTracker,
-    retries: int = 4,
+    retries: int = 8,
 ) -> str:
     review_text = _format_reviews(reviews)
     prompt = USER_PROMPT_TEMPLATE.format(
@@ -134,9 +134,10 @@ def _call_api(
                 in_tok, out_tok, tracker.total_tokens, MAX_TOKEN_BUDGET,
             )
             return response.text or ""
-        except gerrors.ClientError as e:
-            if "429" in str(e) or "quota" in str(e).lower() or "rate" in str(e).lower():
-                logger.warning("Rate limited -- retrying in %ds (attempt %d/%d)", delay, attempt + 1, retries)
+        except (gerrors.ClientError, gerrors.ServerError) as e:
+            code = str(e)
+            if "429" in code or "503" in code or "RESOURCE_EXHAUSTED" in code or "UNAVAILABLE" in code or "quota" in code.lower():
+                logger.warning("Retrying in %ds — %s (attempt %d/%d)", delay, code[:80], attempt + 1, retries)
                 time.sleep(delay)
                 delay *= 2
             else:
@@ -148,7 +149,7 @@ def _call_api(
 def _synthesise(batch_outputs: list[str], tracker: _UsageTracker) -> str:
     prompt = SYNTHESIS_PROMPT.format(batch_outputs="\n\n".join(batch_outputs))
     delay = 5
-    for attempt in range(4):
+    for attempt in range(8):
         try:
             response = _get_client().models.generate_content(
                 model=_MODEL,
@@ -163,8 +164,9 @@ def _synthesise(batch_outputs: list[str], tracker: _UsageTracker) -> str:
             out_tok = (usage.candidates_token_count or 0) if usage else 0
             tracker.record(in_tok, out_tok)
             return response.text or ""
-        except gerrors.ClientError as e:
-            if "429" in str(e) or "quota" in str(e).lower() or "rate" in str(e).lower():
+        except (gerrors.ClientError, gerrors.ServerError) as e:
+            code = str(e)
+            if "429" in code or "503" in code or "RESOURCE_EXHAUSTED" in code or "UNAVAILABLE" in code or "quota" in code.lower():
                 logger.warning("Rate limited on synthesis -- retrying in %ds", delay)
                 time.sleep(delay)
                 delay *= 2
