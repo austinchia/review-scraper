@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import re
+import html as _html
 from string import Template
 from datetime import datetime
 
@@ -184,7 +185,7 @@ def _parse_sentiment(analysis: str) -> str:
 
 def _source_badges(sources: dict) -> str:
     return "".join(
-        f'<span class="badge">{name.capitalize()}</span>'
+        f'<span class="badge">{_html.escape(name.capitalize())}</span>'
         for name in sorted(sources)
     )
 
@@ -197,7 +198,7 @@ def _source_bars(sources: dict, total: int) -> str:
         pct = round(count / total * 100)
         lines.append(
             f'<div class="source-row">'
-            f'<span>{name.capitalize()}</span>'
+            f'<span>{_html.escape(name.capitalize())}</span>'
             f'<div class="bar-track"><div class="bar-fill" style="width:{pct}%"></div></div>'
             f'<span>{count}</span></div>'
         )
@@ -216,7 +217,7 @@ def write_dashboard(week_id: str, analysis: str, stats: dict) -> str:
     total     = stats.get("total", 0)
     sources   = stats.get("sources", {})
 
-    html = _HTML.substitute(
+    html = _HTML.safe_substitute(
         week_id=week_id,
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
         source_badges=_source_badges(sources),
