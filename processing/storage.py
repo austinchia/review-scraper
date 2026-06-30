@@ -86,3 +86,12 @@ def mark_processed(ids: list[int]):
             "UPDATE reviews SET processed = 1 WHERE id = ?", [(i,) for i in ids]
         )
     conn.close()
+
+
+def fetch_weekly_counts() -> list[dict]:
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT week_id, COUNT(*) as count FROM reviews GROUP BY week_id ORDER BY week_id ASC"
+    ).fetchall()
+    conn.close()
+    return [{"week_id": r[0], "count": r[1]} for r in rows]
