@@ -9,6 +9,7 @@ from processing.cleaner import clean
 from processing.storage import save_reviews, fetch_unprocessed, mark_processed
 from ai.analyser import analyse
 from output.formatter import write_digest
+from output.html_generator import write_dashboard
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,6 +69,9 @@ def main():
     digest_path = write_digest(week_id, analysis, stats)
     logger.info("Digest saved: %s", digest_path)
 
+    dashboard_path = write_dashboard(week_id, analysis, stats)
+    logger.info("Dashboard written: %s", dashboard_path)
+
     mark_processed([r["id"] for r in reviews])
     logger.info("Marked %d reviews as processed", len(reviews))
 
@@ -77,6 +81,7 @@ def main():
     for source, count in stats["sources"].items():
         print(f"  {source}: {count}")
     print(f"Digest:     {digest_path}")
+    print(f"Dashboard:  {dashboard_path}")
 
 
 if __name__ == "__main__":
