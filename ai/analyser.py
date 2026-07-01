@@ -122,7 +122,8 @@ def _call_api(
                 contents=prompt,
                 config=genai.types.GenerateContentConfig(
                     system_instruction=_SYSTEM,
-                    max_output_tokens=2048,
+                    max_output_tokens=4096,
+                    thinking_config=genai.types.ThinkingConfig(thinking_budget=0),
                 ),
             )
             usage = response.usage_metadata
@@ -156,7 +157,8 @@ def _synthesise(batch_outputs: list[str], tracker: _UsageTracker) -> str:
                 contents=prompt,
                 config=genai.types.GenerateContentConfig(
                     system_instruction=_SYSTEM,
-                    max_output_tokens=2048,
+                    max_output_tokens=4096,
+                    thinking_config=genai.types.ThinkingConfig(thinking_budget=0),
                 ),
             )
             usage = response.usage_metadata
