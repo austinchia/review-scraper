@@ -2,8 +2,9 @@ import logging
 import sys
 from datetime import datetime
 
-from config import SEARCH_QUERIES, MAX_REVIEWS_PER_SOURCE
-from scrapers.trustpilot import TrustpilotScraper
+from config import SEARCH_QUERIES, MAX_REVIEWS_PER_SOURCE, ANALYSIS_TOPIC
+from scrapers.capterra import CapterraScraper
+from scrapers.hackernews import HackerNewsScraper
 from scrapers.reddit import RedditScraper
 from processing.cleaner import clean
 from processing.storage import save_reviews, fetch_unprocessed, mark_processed
@@ -26,15 +27,9 @@ def get_week_id() -> str:
 
 def run_scrapers(week_id: str) -> dict:
     stats = {"sources": {}, "total": 0}
-    trustpilot = TrustpilotScraper()
     reddit = RedditScraper()
-
-    for query in SEARCH_QUERIES.get("trustpilot", []):
-        logger.info("Scraping Trustpilot for: %s", query)
-        raw = trustpilot.scrape(query, max_reviews=MAX_REVIEWS_PER_SOURCE)
-        cleaned = clean(raw, week_id)
-        saved = save_reviews(cleaned, query=query)
-        stats["sources"]["trustpilot"] = stats["sources"].get("trustpilot", 0) + saved
+    capterra = CapterraScraper()
+    hn = HackerNewsScraper()
 
     for subreddit in SEARCH_QUERIES.get("reddit", []):
         logger.info("Scraping Reddit: %s", subreddit)
@@ -42,6 +37,20 @@ def run_scrapers(week_id: str) -> dict:
         cleaned = clean(raw, week_id)
         saved = save_reviews(cleaned, query=subreddit)
         stats["sources"]["reddit"] = stats["sources"].get("reddit", 0) + saved
+
+    for query in SEARCH_QUERIES.get("capterra", []):
+        logger.info("Scraping Capterra for: %s", query)
+        raw = capterra.scrape(query, max_products=10)
+        cleaned = clean(raw, week_id)
+        saved = save_reviews(cleaned, query=query)
+        stats["sources"]["capterra"] = stats["sources"].get("capterra", 0) + saved
+
+    for query in SEARCH_QUERIES.get("hackernews", []):
+        logger.info("Scraping Hacker News for: %s", query)
+        raw = hn.scrape(query, max_items=MAX_REVIEWS_PER_SOURCE)
+        cleaned = clean(raw, week_id)
+        saved = save_reviews(cleaned, query=query)
+        stats["sources"]["hackernews"] = stats["sources"].get("hackernews", 0) + saved
 
     stats["total"] = sum(stats["sources"].values())
     return stats
@@ -63,8 +72,8 @@ def main():
         logger.warning("No reviews to analyse — exiting early")
         return
 
-    logger.info("Sending reviews to Claude for analysis...")
-    analysis = analyse(reviews, topic="data analytics tools and communities")
+    logger.info("Sending to Gemini for analysis...")
+    analysis = analyse(reviews, topic=ANALYSIS_TOPIC)
 
     digest_path = write_digest(week_id, analysis, stats)
     logger.info("Digest saved: %s", digest_path)

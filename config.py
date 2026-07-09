@@ -4,9 +4,12 @@ import os
 load_dotenv()
 
 SEARCH_QUERIES = {
-    "trustpilot": ["data analytics course", "online data training"],
-    "reddit": ["r/PowerBI", "r/dataengineering", "r/learnpython"],
+    "reddit": ["r/Airtable", "r/SaaS", "r/projectmanagement", "r/nocode"],
+    "capterra": ["notion", "airtable"],
+    "hackernews": ["notion", "airtable"],
 }
+
+ANALYSIS_TOPIC = "productivity and collaboration software tools"
 
 MAX_REVIEWS_PER_SOURCE = 50
 OUTPUT_FORMAT = "markdown"
