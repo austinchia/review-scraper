@@ -88,6 +88,16 @@ def mark_processed(ids: list[int]):
     conn.close()
 
 
+def fetch_source_counts() -> dict:
+    """Total items per source across all runs, for dashboard display."""
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT source, COUNT(*) as count FROM reviews GROUP BY source"
+    ).fetchall()
+    conn.close()
+    return {r["source"]: r["count"] for r in rows}
+
+
 def fetch_weekly_counts() -> list[dict]:
     conn = _connect()
     rows = conn.execute(
