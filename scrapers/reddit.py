@@ -1,6 +1,7 @@
 import logging
 import time
 from xml.etree import ElementTree as ET
+from curl_cffi import requests as cffi_requests
 from scrapers.base import BaseScraper
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,6 @@ class RedditScraper(BaseScraper):
         })
 
     def get(self, url: str, retries: int = 4, **kwargs):
-        import requests
         delay = 2
         for attempt in range(retries):
             try:
@@ -30,7 +30,7 @@ class RedditScraper(BaseScraper):
                     continue
                 resp.raise_for_status()
                 return resp
-            except requests.RequestException as e:
+            except cffi_requests.RequestsError as e:
                 logger.warning("Request failed (attempt %d/%d): %s", attempt + 1, retries, e)
                 if attempt < retries - 1:
                     time.sleep(delay)

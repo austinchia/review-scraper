@@ -93,7 +93,7 @@ def main():
         logger.info("No new reviews — refreshing dashboard with existing data")
         last = _last_digest()
         if last:
-            dashboard_path = write_dashboard(week_id, last, display_stats)
+            dashboard_path = write_dashboard(week_id, last, display_stats, topic=ANALYSIS_TOPIC)
             logger.info("Dashboard refreshed: %s", dashboard_path)
         else:
             logger.warning("No digest found — skipping dashboard update")
@@ -106,7 +106,7 @@ def main():
     digest_path = write_digest(week_id, analysis, run_stats)
     logger.info("Digest saved: %s", digest_path)
 
-    dashboard_path = write_dashboard(week_id, analysis, display_stats)
+    dashboard_path = write_dashboard(week_id, analysis, display_stats, topic=ANALYSIS_TOPIC)
     logger.info("Dashboard written: %s", dashboard_path)
 
     mark_processed([r["id"] for r in reviews])
