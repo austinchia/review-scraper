@@ -24,7 +24,7 @@ def _make_scraper(use_proxy: bool = False):
 
 class CapterraScraper:
     def scrape(self, query: str, max_products: int = 3) -> list[dict]:
-        scraper = _make_scraper(use_proxy=False)
+        scraper = _make_scraper(use_proxy=True)
         url = _SEARCH_URL.format(query=query.replace(" ", "+"))
         logger.info("Capterra: fetching search results for '%s'", query)
 
