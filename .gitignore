@@ -1,6 +1,5 @@
 .env
 data/reviews.db
-digests/
 __pycache__/
 *.pyc
 .venv/
