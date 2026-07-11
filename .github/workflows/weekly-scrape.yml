@@ -44,7 +44,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
           git add digests/ public/index.html
           git diff --cached --quiet || git commit -m "chore: weekly pulse check $(date -u +%Y-W%V)"
-          git pull --rebase origin main
           git push
