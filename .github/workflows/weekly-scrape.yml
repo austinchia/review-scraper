@@ -8,6 +8,9 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    concurrency:
+      group: main-push
+      cancel-in-progress: false
     permissions:
       contents: write
 
@@ -47,6 +50,5 @@ jobs:
           git add digests/ public/index.html
           git diff --cached --quiet || git commit -m "chore: weekly pulse check $(date -u +%Y-W%V)"
           for i in 1 2 3; do
-            git pull --rebase -X theirs origin main && git push && break
-            sleep 5
+            git pull --rebase -X theirs origin main && git push && break || sleep 5
           done
